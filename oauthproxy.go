@@ -56,6 +56,7 @@ type OAuthProxy struct {
 	AuthOnlyPath      string
 
 	redirectURL         *url.URL // the url to receive requests at
+	allowedURL          string
 	provider            providers.Provider
 	ProxyPrefix         string
 	SignInMessage       string
@@ -233,6 +234,7 @@ func NewOAuthProxy(opts *Options, validator func(string) bool) *OAuthProxy {
 		provider:           opts.provider,
 		serveMux:           serveMux,
 		redirectURL:        redirectURL,
+		allowedURL:         opts.AllowedURL,
 		skipAuthRegex:      opts.SkipAuthRegex,
 		skipAuthPreflight:  opts.SkipAuthPreflight,
 		compiledRegex:      opts.CompiledRegex,
@@ -463,12 +465,21 @@ func (p *OAuthProxy) GetRedirect(req *http.Request) (redirect string, err error)
 	if err != nil {
 		return
 	}
-
 	redirect = req.Form.Get("rd")
-	if redirect == "" || !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
-		redirect = "/"
+	if p.allowedURL != "" {
+		matched, err := regexp.MatchString(p.allowedURL, redirect)
+		if err != nil {
+			log.Printf("error parsing regexp %s", err)
+			return redirect, err
+		}
+		if !matched {
+			redirect = "/"
+		}
+	} else {
+		if redirect == "" || !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
+			redirect = "/"
+		}
 	}
-
 	return
 }
 
@@ -600,11 +611,20 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		p.ErrorPage(rw, 403, "Permission Denied", "csrf failed")
 		return
 	}
-
-	if !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
-		redirect = "/"
+	if p.allowedURL != "" {
+		matched, err := regexp.MatchString(p.allowedURL, redirect)
+		if err != nil {
+			log.Printf("error parsing regexp %s", err)
+			return
+		}
+		if !matched {
+			redirect = "/"
+		}
+	} else {
+		if !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
+			redirect = "/"
+		}
 	}
-
 	// set cookie, or deny
 	if p.Validator(session.Email) && p.provider.ValidateGroup(session.Email) {
 		log.Printf("%s authentication complete %s", remoteAddr, session)
