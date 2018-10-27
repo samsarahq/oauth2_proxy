@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bitly/oauth2_proxy/cookie"
-	"github.com/bitly/oauth2_proxy/providers"
 	"github.com/gorilla/websocket"
 	"github.com/koding/websocketproxy"
 	"github.com/mbland/hmacauth"
+	"github.com/samsarahq/oauth2_proxy/cookie"
+	"github.com/samsarahq/oauth2_proxy/providers"
 )
 
 const SignatureHeader = "GAP-Signature"
