@@ -20,7 +20,8 @@ const (
 // responseLogger is wrapper of http.ResponseWriter that keeps track of its HTTP status
 // code and body size
 type responseLogger struct {
-	w        http.ResponseWriter
+	w http.ResponseWriter
+	http.Hijacker
 	status   int
 	size     int
 	upstream string
@@ -106,7 +107,11 @@ func LoggingHandler(out io.Writer, h http.Handler, v bool, requestLoggingTpl str
 func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	t := time.Now()
 	url := *req.URL
-	logger := &responseLogger{w: w}
+	var hijacker http.Hijacker
+	if h, ok := w.(http.Hijacker); ok {
+		hijacker = h
+	}
+	logger := &responseLogger{w: w, Hijacker: hijacker}
 	h.handler.ServeHTTP(logger, req)
 	if !h.enabled {
 		return
