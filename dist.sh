@@ -29,6 +29,7 @@ for os in windows linux darwin; do
         go build -ldflags="-s -w" -o $BUILD/$TARGET/$FILENAME || exit 1
     pushd $BUILD/$TARGET
     sha256sum+=("$(shasum -a 256 $FILENAME || exit 1)")
+    mv $FILENAME oauth2_proxy
     cd .. && tar czvf $TARGET.tar.gz $TARGET
     mv $TARGET.tar.gz $DIR/dist
     popd
