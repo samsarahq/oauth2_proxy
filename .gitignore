@@ -3,6 +3,7 @@ vendor
 dist
 .godeps
 *.exe
+dep
 
 
 # Go.gitignore
