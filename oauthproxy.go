@@ -132,6 +132,9 @@ func setProxyUpstreamHostHeader(proxy *ReverseProxy, target *url.URL) {
 		req.URL.Opaque = req.RequestURI
 		req.URL.RawQuery = ""
 	}
+	proxy.wsProxy.Director = func(req *http.Request, out http.Header) {
+		out.Set("Host", target.Host)
+	}
 }
 func setProxyDirector(proxy *ReverseProxy) {
 	director := proxy.Director
@@ -140,6 +143,11 @@ func setProxyDirector(proxy *ReverseProxy) {
 		// use RequestURI so that we aren't unescaping encoded slashes in the request path
 		req.URL.Opaque = req.RequestURI
 		req.URL.RawQuery = ""
+	}
+	proxy.wsProxy.Director = func(req *http.Request, out http.Header) {
+		// The websocket proxy does not forward Host by default.
+		// See: https://github.com/koding/websocketproxy/issues/9
+		out.Set("Host", req.Host)
 	}
 }
 func NewFileServer(path string, filesystemPath string) (proxy http.Handler) {
