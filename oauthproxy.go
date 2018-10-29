@@ -55,26 +55,27 @@ type OAuthProxy struct {
 	OAuthCallbackPath string
 	AuthOnlyPath      string
 
-	redirectURL         *url.URL // the url to receive requests at
-	allowedURL          string
-	provider            providers.Provider
-	ProxyPrefix         string
-	SignInMessage       string
-	HtpasswdFile        *HtpasswdFile
-	DisplayHtpasswdForm bool
-	serveMux            http.Handler
-	SetXAuthRequest     bool
-	PassBasicAuth       bool
-	SkipProviderButton  bool
-	PassUserHeaders     bool
-	BasicAuthPassword   string
-	PassAccessToken     bool
-	CookieCipher        *cookie.Cipher
-	skipAuthRegex       []string
-	skipAuthPreflight   bool
-	compiledRegex       []*regexp.Regexp
-	templates           *template.Template
-	Footer              string
+	redirectURL           *url.URL // the url to receive requests at
+	allowedURL            string
+	UseJavascriptRedirect bool
+	provider              providers.Provider
+	ProxyPrefix           string
+	SignInMessage         string
+	HtpasswdFile          *HtpasswdFile
+	DisplayHtpasswdForm   bool
+	serveMux              http.Handler
+	SetXAuthRequest       bool
+	PassBasicAuth         bool
+	SkipProviderButton    bool
+	PassUserHeaders       bool
+	BasicAuthPassword     string
+	PassAccessToken       bool
+	CookieCipher          *cookie.Cipher
+	skipAuthRegex         []string
+	skipAuthPreflight     bool
+	compiledRegex         []*regexp.Regexp
+	templates             *template.Template
+	Footer                string
 }
 
 type UpstreamProxy struct {
@@ -230,23 +231,24 @@ func NewOAuthProxy(opts *Options, validator func(string) bool) *OAuthProxy {
 		OAuthCallbackPath: fmt.Sprintf("%s/callback", opts.ProxyPrefix),
 		AuthOnlyPath:      fmt.Sprintf("%s/auth", opts.ProxyPrefix),
 
-		ProxyPrefix:        opts.ProxyPrefix,
-		provider:           opts.provider,
-		serveMux:           serveMux,
-		redirectURL:        redirectURL,
-		allowedURL:         opts.AllowedURL,
-		skipAuthRegex:      opts.SkipAuthRegex,
-		skipAuthPreflight:  opts.SkipAuthPreflight,
-		compiledRegex:      opts.CompiledRegex,
-		SetXAuthRequest:    opts.SetXAuthRequest,
-		PassBasicAuth:      opts.PassBasicAuth,
-		PassUserHeaders:    opts.PassUserHeaders,
-		BasicAuthPassword:  opts.BasicAuthPassword,
-		PassAccessToken:    opts.PassAccessToken,
-		SkipProviderButton: opts.SkipProviderButton,
-		CookieCipher:       cipher,
-		templates:          loadTemplates(opts.CustomTemplatesDir),
-		Footer:             opts.Footer,
+		ProxyPrefix:           opts.ProxyPrefix,
+		provider:              opts.provider,
+		serveMux:              serveMux,
+		redirectURL:           redirectURL,
+		allowedURL:            opts.AllowedURL,
+		skipAuthRegex:         opts.SkipAuthRegex,
+		skipAuthPreflight:     opts.SkipAuthPreflight,
+		compiledRegex:         opts.CompiledRegex,
+		SetXAuthRequest:       opts.SetXAuthRequest,
+		PassBasicAuth:         opts.PassBasicAuth,
+		PassUserHeaders:       opts.PassUserHeaders,
+		BasicAuthPassword:     opts.BasicAuthPassword,
+		PassAccessToken:       opts.PassAccessToken,
+		SkipProviderButton:    opts.SkipProviderButton,
+		CookieCipher:          cipher,
+		templates:             loadTemplates(opts.CustomTemplatesDir),
+		Footer:                opts.Footer,
+		UseJavascriptRedirect: opts.UseJavascriptRedirect,
 	}
 }
 
@@ -424,21 +426,23 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 	}
 
 	t := struct {
-		ProviderName  string
-		SignInMessage string
-		CustomLogin   bool
-		Redirect      string
-		Version       string
-		ProxyPrefix   string
-		Footer        template.HTML
+		ProviderName          string
+		SignInMessage         string
+		CustomLogin           bool
+		Redirect              string
+		Version               string
+		ProxyPrefix           string
+		Footer                template.HTML
+		UseJavascriptRedirect bool
 	}{
-		ProviderName:  p.provider.Data().ProviderName,
-		SignInMessage: p.SignInMessage,
-		CustomLogin:   p.displayCustomLoginForm(),
-		Redirect:      redirect_url,
-		Version:       VERSION,
-		ProxyPrefix:   p.ProxyPrefix,
-		Footer:        template.HTML(p.Footer),
+		ProviderName:          p.provider.Data().ProviderName,
+		SignInMessage:         p.SignInMessage,
+		CustomLogin:           p.displayCustomLoginForm(),
+		Redirect:              redirect_url,
+		Version:               VERSION,
+		ProxyPrefix:           p.ProxyPrefix,
+		Footer:                template.HTML(p.Footer),
+		UseJavascriptRedirect: p.UseJavascriptRedirect,
 	}
 	p.templates.ExecuteTemplate(rw, "sign_in.html", t)
 }
