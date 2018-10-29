@@ -55,25 +55,27 @@ type OAuthProxy struct {
 	OAuthCallbackPath string
 	AuthOnlyPath      string
 
-	redirectURL         *url.URL // the url to receive requests at
-	provider            providers.Provider
-	ProxyPrefix         string
-	SignInMessage       string
-	HtpasswdFile        *HtpasswdFile
-	DisplayHtpasswdForm bool
-	serveMux            http.Handler
-	SetXAuthRequest     bool
-	PassBasicAuth       bool
-	SkipProviderButton  bool
-	PassUserHeaders     bool
-	BasicAuthPassword   string
-	PassAccessToken     bool
-	CookieCipher        *cookie.Cipher
-	skipAuthRegex       []string
-	skipAuthPreflight   bool
-	compiledRegex       []*regexp.Regexp
-	templates           *template.Template
-	Footer              string
+	redirectURL           *url.URL // the url to receive requests at
+	allowedURL            string
+	UseJavascriptRedirect bool
+	provider              providers.Provider
+	ProxyPrefix           string
+	SignInMessage         string
+	HtpasswdFile          *HtpasswdFile
+	DisplayHtpasswdForm   bool
+	serveMux              http.Handler
+	SetXAuthRequest       bool
+	PassBasicAuth         bool
+	SkipProviderButton    bool
+	PassUserHeaders       bool
+	BasicAuthPassword     string
+	PassAccessToken       bool
+	CookieCipher          *cookie.Cipher
+	skipAuthRegex         []string
+	skipAuthPreflight     bool
+	compiledRegex         []*regexp.Regexp
+	templates             *template.Template
+	Footer                string
 }
 
 type UpstreamProxy struct {
@@ -229,22 +231,24 @@ func NewOAuthProxy(opts *Options, validator func(string) bool) *OAuthProxy {
 		OAuthCallbackPath: fmt.Sprintf("%s/callback", opts.ProxyPrefix),
 		AuthOnlyPath:      fmt.Sprintf("%s/auth", opts.ProxyPrefix),
 
-		ProxyPrefix:        opts.ProxyPrefix,
-		provider:           opts.provider,
-		serveMux:           serveMux,
-		redirectURL:        redirectURL,
-		skipAuthRegex:      opts.SkipAuthRegex,
-		skipAuthPreflight:  opts.SkipAuthPreflight,
-		compiledRegex:      opts.CompiledRegex,
-		SetXAuthRequest:    opts.SetXAuthRequest,
-		PassBasicAuth:      opts.PassBasicAuth,
-		PassUserHeaders:    opts.PassUserHeaders,
-		BasicAuthPassword:  opts.BasicAuthPassword,
-		PassAccessToken:    opts.PassAccessToken,
-		SkipProviderButton: opts.SkipProviderButton,
-		CookieCipher:       cipher,
-		templates:          loadTemplates(opts.CustomTemplatesDir),
-		Footer:             opts.Footer,
+		ProxyPrefix:           opts.ProxyPrefix,
+		provider:              opts.provider,
+		serveMux:              serveMux,
+		redirectURL:           redirectURL,
+		allowedURL:            opts.AllowedURL,
+		skipAuthRegex:         opts.SkipAuthRegex,
+		skipAuthPreflight:     opts.SkipAuthPreflight,
+		compiledRegex:         opts.CompiledRegex,
+		SetXAuthRequest:       opts.SetXAuthRequest,
+		PassBasicAuth:         opts.PassBasicAuth,
+		PassUserHeaders:       opts.PassUserHeaders,
+		BasicAuthPassword:     opts.BasicAuthPassword,
+		PassAccessToken:       opts.PassAccessToken,
+		SkipProviderButton:    opts.SkipProviderButton,
+		CookieCipher:          cipher,
+		templates:             loadTemplates(opts.CustomTemplatesDir),
+		Footer:                opts.Footer,
+		UseJavascriptRedirect: opts.UseJavascriptRedirect,
 	}
 }
 
@@ -422,21 +426,23 @@ func (p *OAuthProxy) SignInPage(rw http.ResponseWriter, req *http.Request, code 
 	}
 
 	t := struct {
-		ProviderName  string
-		SignInMessage string
-		CustomLogin   bool
-		Redirect      string
-		Version       string
-		ProxyPrefix   string
-		Footer        template.HTML
+		ProviderName          string
+		SignInMessage         string
+		CustomLogin           bool
+		Redirect              string
+		Version               string
+		ProxyPrefix           string
+		Footer                template.HTML
+		UseJavascriptRedirect bool
 	}{
-		ProviderName:  p.provider.Data().ProviderName,
-		SignInMessage: p.SignInMessage,
-		CustomLogin:   p.displayCustomLoginForm(),
-		Redirect:      redirect_url,
-		Version:       VERSION,
-		ProxyPrefix:   p.ProxyPrefix,
-		Footer:        template.HTML(p.Footer),
+		ProviderName:          p.provider.Data().ProviderName,
+		SignInMessage:         p.SignInMessage,
+		CustomLogin:           p.displayCustomLoginForm(),
+		Redirect:              redirect_url,
+		Version:               VERSION,
+		ProxyPrefix:           p.ProxyPrefix,
+		Footer:                template.HTML(p.Footer),
+		UseJavascriptRedirect: p.UseJavascriptRedirect,
 	}
 	p.templates.ExecuteTemplate(rw, "sign_in.html", t)
 }
@@ -463,12 +469,11 @@ func (p *OAuthProxy) GetRedirect(req *http.Request) (redirect string, err error)
 	if err != nil {
 		return
 	}
-
-	redirect = req.Form.Get("rd")
-	if redirect == "" || !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
-		redirect = "/"
+	redirect, err = p.getValidatedRedirect(req.Form.Get("rd"))
+	if err != nil {
+		log.Printf("failed to validate redirect %s", err)
+		return redirect, err
 	}
-
 	return
 }
 
@@ -539,6 +544,26 @@ func (p *OAuthProxy) SignIn(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (p *OAuthProxy) getValidatedRedirect(redirect string) (string, error) {
+	fallbackRedirect := "/"
+	// We using 2 types of validation - basic checks or based on allowedURLs
+	switch {
+	case redirect == "":
+		return fallbackRedirect, nil
+	case p.allowedURL != "":
+		matched, err := regexp.MatchString(p.allowedURL, redirect)
+		if err != nil {
+			return fallbackRedirect, err
+		}
+		if !matched {
+			return fallbackRedirect, err
+		}
+	case !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//"):
+		return fallbackRedirect, nil
+	}
+	return redirect, nil
+}
+
 func (p *OAuthProxy) SignOut(rw http.ResponseWriter, req *http.Request) {
 	p.ClearSessionCookie(rw, req)
 	http.Redirect(rw, req, "/", 302)
@@ -588,7 +613,12 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	nonce := s[0]
-	redirect := s[1]
+	redirect, err := p.getValidatedRedirect(s[1])
+	if err != nil {
+		log.Printf("failed to validate redirect %s", err)
+		p.ErrorPage(rw, 500, "Internal Error", "Internal Error")
+		return
+	}
 	c, err := req.Cookie(p.CSRFCookieName)
 	if err != nil {
 		p.ErrorPage(rw, 403, "Permission Denied", err.Error())
@@ -600,11 +630,6 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		p.ErrorPage(rw, 403, "Permission Denied", "csrf failed")
 		return
 	}
-
-	if !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
-		redirect = "/"
-	}
-
 	// set cookie, or deny
 	if p.Validator(session.Email) && p.provider.ValidateGroup(session.Email) {
 		log.Printf("%s authentication complete %s", remoteAddr, session)

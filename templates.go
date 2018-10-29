@@ -139,6 +139,12 @@ func getTemplates() *template.Template {
 			})();
 		}
 	</script>
+	{{if .UseJavascriptRedirect}}
+	<script>
+		var selectors = Array.prototype.slice.call(document.querySelectorAll('input[name="rd"]'));
+		selectors.forEach((input) => input.value = window.location.href);
+	</script>
+	{{end}}
 	<footer>
 	{{ if eq .Footer "-" }}
 	{{ else if eq .Footer ""}}

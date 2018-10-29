@@ -41,6 +41,8 @@ type Options struct {
 	DisplayHtpasswdForm      bool     `flag:"display-htpasswd-form" cfg:"display_htpasswd_form"`
 	CustomTemplatesDir       string   `flag:"custom-templates-dir" cfg:"custom_templates_dir"`
 	Footer                   string   `flag:"footer" cfg:"footer"`
+	AllowedURL               string   `flag:"allowed-url" cfg:"allowed-url"`
+	UseJavascriptRedirect    bool     `flag:"use-javascript-redirect" cfg:"use-javascript-redirect"`
 
 	CookieName     string        `flag:"cookie-name" cfg:"cookie_name" env:"OAUTH2_PROXY_COOKIE_NAME"`
 	CookieSecret   string        `flag:"cookie-secret" cfg:"cookie_secret" env:"OAUTH2_PROXY_COOKIE_SECRET"`
