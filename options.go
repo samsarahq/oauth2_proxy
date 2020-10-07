@@ -47,6 +47,7 @@ type Options struct {
 	CookieName     string        `flag:"cookie-name" cfg:"cookie_name" env:"OAUTH2_PROXY_COOKIE_NAME"`
 	CookieSecret   string        `flag:"cookie-secret" cfg:"cookie_secret" env:"OAUTH2_PROXY_COOKIE_SECRET"`
 	CookieDomain   string        `flag:"cookie-domain" cfg:"cookie_domain" env:"OAUTH2_PROXY_COOKIE_DOMAIN"`
+	CookieSameSite string        `flag:"cookie-samesite" cfg:"cookie_samesite" env:"OAUTH2_PROXY_COOKIE_SAMESITE"`
 	CookieExpire   time.Duration `flag:"cookie-expire" cfg:"cookie_expire" env:"OAUTH2_PROXY_COOKIE_EXPIRE"`
 	CookieRefresh  time.Duration `flag:"cookie-refresh" cfg:"cookie_refresh" env:"OAUTH2_PROXY_COOKIE_REFRESH"`
 	CookieSecure   bool          `flag:"cookie-secure" cfg:"cookie_secure"`
@@ -103,6 +104,7 @@ func NewOptions() *Options {
 		DisplayHtpasswdForm:  true,
 		CookieName:           "_oauth2_proxy",
 		CookieSecure:         true,
+		CookieSameSite:       "None",
 		CookieHttpOnly:       true,
 		CookieExpire:         time.Duration(168) * time.Hour,
 		CookieRefresh:        time.Duration(0),
@@ -239,6 +241,10 @@ func (o *Options) Validate() error {
 	msgs = parseSignatureKey(o, msgs)
 	msgs = validateCookieName(o, msgs)
 
+	if _, ok := validateCookieSameSite(o.CookieSameSite); !ok {
+		msgs = append(msgs, "cookie same site must be strict, lax or none")
+	}
+
 	if len(msgs) != 0 {
 		return fmt.Errorf("Invalid configuration:\n  %s",
 			strings.Join(msgs, "\n  "))
@@ -311,6 +317,18 @@ func validateCookieName(o *Options, msgs []string) []string {
 		return append(msgs, fmt.Sprintf("invalid cookie name: %q", o.CookieName))
 	}
 	return msgs
+}
+
+func validateCookieSameSite(o string) (http.SameSite, bool) {
+	switch strings.ToLower(o) {
+	case "strict":
+		return http.SameSiteStrictMode, true
+	case "lax":
+		return http.SameSiteLaxMode, true
+	case "none":
+		return http.SameSiteNoneMode, true
+	}
+	return http.SameSiteDefaultMode, false
 }
 
 func addPadding(secret string) string {
