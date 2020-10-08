@@ -15,8 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitly/oauth2_proxy/providers"
-	"github.com/bmizerany/assert"
 	"github.com/mbland/hmacauth"
 	"github.com/samsarahq/oauth2_proxy/providers"
 	"github.com/stretchr/testify/assert"
@@ -588,6 +586,14 @@ func TestProcessCookieNoCookieError(t *testing.T) {
 	if session != nil {
 		t.Errorf("expected nil session. got %#v", session)
 	}
+}
+
+func TestProcessCookieSameSiteSet(t *testing.T) {
+	pc_test := NewProcessCookieTestWithDefaults()
+	pc_test.proxy.CookieSameSite = http.SameSiteStrictMode
+
+	cookie := pc_test.MakeCookie("", time.Now())
+	assert.Equal(t, cookie.SameSite, http.SameSiteStrictMode)
 }
 
 func TestProcessCookieRefreshNotSet(t *testing.T) {
