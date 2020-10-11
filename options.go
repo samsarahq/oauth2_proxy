@@ -43,6 +43,7 @@ type Options struct {
 	Footer                   string   `flag:"footer" cfg:"footer"`
 	AllowedURL               string   `flag:"allowed-url" cfg:"allowed-url"`
 	UseJavascriptRedirect    bool     `flag:"use-javascript-redirect" cfg:"use-javascript-redirect"`
+	AllowedWebsocketOrigin   string   `flag:"allowed-websocket-origin" cfg:"allowed-websocket-origin"`
 
 	CookieName     string        `flag:"cookie-name" cfg:"cookie_name" env:"OAUTH2_PROXY_COOKIE_NAME"`
 	CookieSecret   string        `flag:"cookie-secret" cfg:"cookie_secret" env:"OAUTH2_PROXY_COOKIE_SECRET"`

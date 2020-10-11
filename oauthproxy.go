@@ -119,14 +119,39 @@ func NewReverseProxy(target *url.URL) *ReverseProxy {
 	case "http":
 		wsTarget.Scheme = "ws"
 	}
+	wsProxy := websocketproxy.NewProxy(wsTarget)
+	wsProxy.Upgrader = &websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
 
 	return &ReverseProxy{
 		ReverseProxy: httputil.NewSingleHostReverseProxy(target),
-		wsProxy:      websocketproxy.NewProxy(wsTarget),
+		wsProxy:      wsProxy,
 	}
 }
 
-func setProxyUpstreamHostHeader(proxy *ReverseProxy, target *url.URL) {
+func websocketOriginChecker(allowedWebsocketOrigin string) func(*http.Request) bool {
+	return func(req *http.Request) bool {
+		origin := req.Header["Origin"]
+		if len(origin) == 0 {
+			return true
+		}
+
+		u, err := url.Parse(origin[0])
+		if err != nil {
+			return false
+		}
+
+		matched, err := regexp.MatchString(allowedWebsocketOrigin, u.Host)
+		if err != nil {
+			return false
+		}
+		return matched
+	}
+}
+
+func setProxyUpstreamHostHeader(proxy *ReverseProxy, target *url.URL, allowedWebsocketOrigin string) {
 	director := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		director(req)
@@ -138,8 +163,12 @@ func setProxyUpstreamHostHeader(proxy *ReverseProxy, target *url.URL) {
 	proxy.wsProxy.Director = func(req *http.Request, out http.Header) {
 		out.Set("Host", target.Host)
 	}
+	if allowedWebsocketOrigin != "" {
+		proxy.wsProxy.Upgrader.CheckOrigin = websocketOriginChecker(allowedWebsocketOrigin)
+	}
 }
-func setProxyDirector(proxy *ReverseProxy) {
+
+func setProxyDirector(proxy *ReverseProxy, allowedWebsocketOrigin string) {
 	director := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		director(req)
@@ -152,7 +181,11 @@ func setProxyDirector(proxy *ReverseProxy) {
 		// See: https://github.com/koding/websocketproxy/issues/9
 		out.Set("Host", req.Host)
 	}
+	if allowedWebsocketOrigin != "" {
+		proxy.wsProxy.Upgrader.CheckOrigin = websocketOriginChecker(allowedWebsocketOrigin)
+	}
 }
+
 func NewFileServer(path string, filesystemPath string) (proxy http.Handler) {
 	return http.StripPrefix(path, http.FileServer(http.Dir(filesystemPath)))
 }
@@ -172,9 +205,9 @@ func NewOAuthProxy(opts *Options, validator func(string) bool) *OAuthProxy {
 			log.Printf("mapping path %q => upstream %q", path, u)
 			proxy := NewReverseProxy(u)
 			if !opts.PassHostHeader {
-				setProxyUpstreamHostHeader(proxy, u)
+				setProxyUpstreamHostHeader(proxy, u, opts.AllowedWebsocketOrigin)
 			} else {
-				setProxyDirector(proxy)
+				setProxyDirector(proxy, opts.AllowedWebsocketOrigin)
 			}
 			serveMux.Handle(path,
 				&UpstreamProxy{u.Host, proxy, auth})
